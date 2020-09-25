@@ -1,0 +1,88 @@
+---
+title: "rFSA and Mixed Effects Models"
+author: "Dr. Joshua Lambert"
+date: "9/24/2020"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rFSA)
+library(lme4)
+library(formula.tools)
+load(url("https://github.com/ourcodingclub/CC-Linear-mixed-models/blob/master/dragons.RData?raw=true"))
+dragons$bodyLength2 <- scale(dragons$bodyLength, center = TRUE, scale = TRUE)
+#adding fake genetic data. Genetic data randomly drawn from beta distribution with alpha=1 and beta=5.
+set.seed(123)
+dragons[,paste("Gene",1:100,sep = "")]<-rbeta(dim(dragons)[1]*100,shape1 = 1,shape2 = 5)
+```
+## Example
+(Borrowed and modified from here: https://ourcodingclub.github.io/tutorials/mixed-models/) Imagine that we decided to train dragons and so we went out into the mountains and collected data on dragon intelligence (testScore) as a prerequisite. Also, we collect a specimen from the dragon to measure genetic expression on 100 commonly studied genes. We sampled individuals with a range of body lengths across three sites in eight different mountain ranges. First the investigator is interested in assessing the impact of bodylength on test score in a random intercepts model which accounts for the random effect of mountain range.
+```{r}
+# Research Question 1:
+mixed.lmer <- lmer(testScore ~ bodyLength2 + (1|mountainRange), data = dragons)
+summary(mixed.lmer)
+lme4::confint.merMod(mixed.lmer)
+```
+The random intercepts for mountain range acount for much of the total variance. Based on the confidence intervals it doesn't appear that bodyLength2 has an effect on intelligence.
+
+## rFSA and Linear Mixed Effects Models
+
+Out of the box, rFSA does not officially support linear mixed effects models. If the random component of the linear mixed effects models is determined a work around is possible with a wrapper function.The work around will allow the exploration of fixed main and interaction effects. So in our dragon example we may be sure that we only wish to include a random intercept and explore the other data for fixed main and interaction effects. See the following example wrapper function:
+
+```{r}
+#be sure to have loaded formula.tools
+lmer_FSA<-function(formula, data){
+  if("mountainRange" %in% all.vars(formula(formula))){ 
+    # this is needed because if mountain range is in the formula then we technically don't want to use it.
+  lmer(formula = "testScore ~ 1",data=data,)
+} else{
+  form<-paste(as.character(formula),"+(1|mountainRange)",sep = "")
+  lmer(formula = form,data=data,)
+  }
+ 
+}
+
+AIC2<-function(model){
+  if(is.null(model)){
+    return(Inf)
+  } else{
+    AIC(model)
+  }
+}
+```
+
+If we had random slopes we could have included that in our wrapper function as well.
+
+Now back to our example.
+
+## Example: Adding interactions to our linear mixed effects model
+Our investigator is bummed out that their research question 1 was supported with the model that they fit.They decide that they would like to explore the rest of the data by exploring interactions within the data. These analyses will be exploratory and will be investigated further in future work.
+```{r}
+# Research Question 2:
+set.seed(123)
+fsa_fit<-FSA(formula = "testScore ~ 1",data = dragons[,-c(2,4,5)],
+             fitfunc = lmer_FSA,#what function should FSA use to fit models? lm, glm, or some wrapper function?
+             fixvar = NULL, #used if you want to always force variable(s) in the model
+             interactions = TRUE, #should variables included be added with a + between or *. whether they will be treated as interaction or main effects
+             m=2, # number of variables to add as main effects or order of interaction to explore (if intearctions=TRUE)
+             numrs = 10, #number of random starts to do.
+             cores = 1, #number of cores to use on computer (currently only works on linux and mac)
+             criterion = AIC2, #criteria used for finding solutions
+             minmax = "min" #Minimize(min), or maximize(max) criteria? 
+              )
+
+fsa_fit$table
+
+fit1<-lmer(testScore ~ Gene16*Gene52 + (1|mountainRange), data = dragons); AIC2(fit1) #matches with fsa_fit table
+fit2<-lmer(testScore ~ Gene29*Gene37 + (1|mountainRange), data = dragons); AIC2(fit2) #matches with fsa_fit table
+fit3<-lmer(testScore ~ Gene1*Gene63 + (1|mountainRange), data = dragons); AIC2(fit3)  #matches with fsa_fit table
+```
+
+Using FSA the research found three two-way interactions to investiage further. Neat. The research should go on to further investigate these through well thought out data visualizations as well as in new data in the future. FSA is an exploratory procedure meant to develop new data driven hypothesis. 
+
+
+
+
