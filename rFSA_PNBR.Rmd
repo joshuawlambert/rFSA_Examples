@@ -1,0 +1,47 @@
+---
+title: "rFSA and Poisson and Negative Binomial Regression Models"
+author: "Dr. Joshua Lambert"
+date: "10/13/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(AER)
+library(rFSA)
+library(MASS)
+data("PhDPublications")
+```
+
+Complete subset selction for Poisson and Negative Binomial Regression using rFSA.
+
+## Poisson Regression
+
+Using the glm function and family="poisson"
+
+```{r}
+#poisson regression subset selection of size 3 using rFSA
+fsafit<-FSA(formula = "articles~1",data = PhDPublications,fitfunc = glm,
+            family="poisson",quad = FALSE, m = 3, numrs = 10,
+            interactions = FALSE,criterion = AIC, minmax = "min")
+
+fsafit #show solutions
+m1<-fitmodels(fsafit)[[2]] #fit solution
+summary(m1)
+```
+
+## Negative Binomial Regression
+
+Using the glm.nb function from MASS
+
+```{r}
+#negative binomial regression subset selection of size 3 using rFSA and
+#the glm.nb function from the MASS package
+library(MASS)
+fsafit<-FSA(formula = "articles~1",data = PhDPublications,fitfunc = glm.nb,
+            quad = FALSE, m = 3, numrs = 10,
+            interactions = FALSE,criterion = AIC, minmax = "min")
+fsafit #show solutions
+m2<-fitmodels(fsafit)[[2]] #fit solution
+summary(m2)
+
+```
